@@ -33,6 +33,14 @@ model_df = pd.read_excel("./Data/Edmonton_Tmin_Cannon_16_Compiled .xlsx")
 obs_df["date"] = pd.to_datetime(obs_df["DATE"])  # Observed data
 model_df["date"] = pd.to_datetime(model_df["ALL DATES"])  # Model data
 
+# Replace anomalous values (-9999.9) with NaN
+model_df = model_df.replace(-9999.9, pd.NA)
+obs_df = obs_df.replace(-9999.9, pd.NA)
+
+# Handle missing values
+model_df = model_df.fillna(model_df.mean())  # Fill missing values with column mean
+obs_df = obs_df.fillna(obs_df.mean())  # Fill missing values with column mean
+
 # Ensure all model columns are numeric
 model_df = model_df.apply(pd.to_numeric, errors="coerce")
 
