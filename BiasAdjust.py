@@ -16,12 +16,10 @@ from xclim import set_options  # For configuring xclim options
 # -------------------------------
 # STEP 1: Load data from Excel
 # -------------------------------
-# We assume the data is stored in two Excel files:
-#   - "obs" (observed data) contains station data (e.g., Edmonton Blatchford)
-#   - "model" (model data) contains climate model outputs
-#
-# Each file should have columns like ["date", "Tmax", "Tmin"].
-# Dates must be converted to datetime format for compatibility with xclim.
+# Load observed and model data from Excel files.
+# Observed data contains station data (e.g., Edmonton Blatchford).
+# Model data contains climate model outputs.
+# Both datasets must have a "date" column for time-based operations.
 
 # Load observed data from Excel
 obs_df = pd.read_excel("./Data/Edmonton_Blatchford_Joined.xlsx")
@@ -34,22 +32,25 @@ obs_df["date"] = pd.to_datetime(obs_df["DATE"])  # Observed data
 model_df["date"] = pd.to_datetime(model_df["ALL DATES"])  # Model data
 
 # Replace anomalous values (-9999.9) with NaN
+# These values are placeholders for missing or invalid data.
 model_df = model_df.replace(-9999.9, pd.NA)
 obs_df = obs_df.replace(-9999.9, pd.NA)
 
 # Handle missing values
-model_df = model_df.fillna(model_df.mean())  # Fill missing values with column mean
-obs_df = obs_df.fillna(obs_df.mean())  # Fill missing values with column mean
+# Fill missing values with the column mean to ensure no gaps in the data.
+model_df = model_df.fillna(model_df.mean())
+obs_df = obs_df.fillna(obs_df.mean())
 
 # Ensure all model columns are numeric
+# Convert all columns to numeric, coercing invalid values to NaN.
 model_df = model_df.apply(pd.to_numeric, errors="coerce")
 
-# Handle missing values
+# Handle missing values again (if needed)
 model_df = model_df.fillna(model_df.mean())
 
 # -------------------------------
 # STEP 2: Convert all model columns to a single xarray.DataArray
-# ==============================================================
+# -------------------------------
 # Combine all model columns (except the 'date' column) into a single DataArray.
 # This allows us to perform bias adjustment on all columns simultaneously.
 
@@ -79,7 +80,7 @@ obs_tmin = xr.DataArray(
 # STEP 3: Define training periods
 # -------------------------------
 # Training periods are time windows used to train the bias adjustment models.
-# Here, we define 30-year, 50-year, and 70-year windows.
+# These periods are defined as slices of time.
 
 train_slice_30yr = slice("1971-01-01", "2000-12-31")  # 30-year window
 train_slice_50yr = slice("1951-01-01", "2000-12-31")  # 50-year window
@@ -93,6 +94,7 @@ train_slice_70yr = slice("1931-01-01", "2000-12-31")  # 70-year window
 # xclim provides a built-in method called "EmpiricalQuantileMapping" (EQM).
 
 # Check the time range of the data
+# This ensures that the observed and model data overlap in time.
 print("Observed time range:", obs_tmin["time"].min().values, "to", obs_tmin["time"].max().values)
 print("Model time range:", model_tmin_all["time"].min().values, "to", model_tmin_all["time"].max().values)
 
@@ -100,18 +102,19 @@ print("Model time range:", model_tmin_all["time"].min().values, "to", model_tmin
 obs_tmin["time"] = pd.to_datetime(obs_tmin["time"].values)
 model_tmin_all["time"] = pd.to_datetime(model_tmin_all["time"].values)
 
-# Select data for the training period
-obs_30 = obs_tmin.sel(time=train_slice_50yr)
-mod_30 = model_tmin_all.sel(time=train_slice_50yr)
+# Select data for the training period (30-year window)
+obs_30 = obs_tmin.sel(time=train_slice_30yr)
+mod_30 = model_tmin_all.sel(time=train_slice_30yr)
 
 # Check if the selected data is empty
 if obs_30.size == 0 or mod_30.size == 0:
     raise ValueError("The selected training period does not overlap with the data.")
 
 # Align time steps
+# Align observed and model data along the time dimension.
 obs_30, mod_30 = xr.align(obs_30, mod_30, join="inner")
 
-# Train the EQM model
+# Train the EQM model for the 30-year window
 QM_30 = sdba.EmpiricalQuantileMapping.train(
     ref=obs_30,  # Observed data (reference)
     hist=mod_30,  # Model data (historical)
@@ -128,15 +131,6 @@ obs_70 = obs_tmin.sel(time=train_slice_70yr)
 mod_70 = model_tmin_all.sel(time=train_slice_70yr)
 obs_70, mod_70 = xr.align(obs_70, mod_70, join="inner")
 QM_70 = sdba.EmpiricalQuantileMapping.train(ref=obs_70, hist=mod_70)
-
-# Align observed and model data
-obs_train, model_train = xr.align(obs_tmin, model_tmin_all, join="inner")
-
-# Train the EQM model
-QM_30 = sdba.EmpiricalQuantileMapping.train(
-    ref=obs_train,  # Observed data (reference)
-    hist=model_train,  # Model data (historical)
-)
 
 # =====================================================
 # STEP 5: Apply corrections
@@ -192,12 +186,6 @@ tmin_50_subset = tmin_corrected_50.sel(time=slice(start_plot, end_plot))
 tmin_70_subset = tmin_corrected_70.sel(time=slice(start_plot, end_plot))
 obs_subset = obs_tmin.sel(time=slice(start_plot, end_plot))
 
-# Calculate exceedance probabilities for the entire dataset
-prob_raw_all = (model_tmin_all > threshold).mean(dim="time")
-prob_corrected_30 = (tmin_corrected_30 > threshold).mean(dim="time")
-prob_corrected_50 = (tmin_corrected_50 > threshold).mean(dim="time")
-prob_corrected_70 = (tmin_corrected_70 > threshold).mean(dim="time")
-
 # -------------------------------
 # STEP 2: Create Dash app
 # -------------------------------
@@ -213,6 +201,15 @@ app.layout = html.Div([
         value=model_columns[0],  # Default value (first model)
         clearable=False,
     ),
+    html.Div([
+        html.Label("Exceedance Threshold (°C):"),
+        dcc.Input(
+            id="threshold-input",
+            type="number",
+            value=15,  # Default threshold
+            step=0.1,
+        ),
+    ], style={"margin-bottom": "20px"}),
     dcc.Graph(id="tmin-graph"),  # Graph component
     html.H3("Exceedance Probabilities"),  # Table title
     dash_table.DataTable(  # Table to display probabilities
@@ -235,9 +232,10 @@ app.layout = html.Div([
 @app.callback(
     [dash.dependencies.Output("tmin-graph", "figure"),
      dash.dependencies.Output("probability-table", "data")],
-    [dash.dependencies.Input("model-dropdown", "value")]
+    [dash.dependencies.Input("model-dropdown", "value"),
+     dash.dependencies.Input("threshold-input", "value")]
 )
-def update_graph_and_table(selected_model):
+def update_graph_and_table(selected_model, threshold):
     # Select the data for the chosen model
     raw_data = model_subset.sel(model=selected_model)
     data_30yr = tmin_30_subset.sel(model=selected_model)
@@ -245,10 +243,10 @@ def update_graph_and_table(selected_model):
     data_70yr = tmin_70_subset.sel(model=selected_model)
 
     # Get exceedance probabilities for the selected model
-    prob_raw = prob_raw_all.sel(model=selected_model).item()
-    prob_30 = prob_corrected_30.sel(model=selected_model).item()
-    prob_50 = prob_corrected_50.sel(model=selected_model).item()
-    prob_70 = prob_corrected_70.sel(model=selected_model).item()
+    prob_raw = (raw_data > threshold).mean().item()
+    prob_30 = (data_30yr > threshold).mean().item()
+    prob_50 = (data_50yr > threshold).mean().item()
+    prob_70 = (data_70yr > threshold).mean().item()
 
     # Create the figure
     figure = {
@@ -259,7 +257,7 @@ def update_graph_and_table(selected_model):
                 y=obs_subset.values,
                 mode="lines",
                 name="Observed Tmin",
-                line=dict(color="black", width=2, dash="dash")
+                line=dict(color="red", width=2, dash="dash")
             ),
             # Plot raw model Tmin
             go.Scatter(
@@ -283,7 +281,7 @@ def update_graph_and_table(selected_model):
                 y=data_50yr.values,
                 mode="lines",
                 name="Bias-Adjusted (50yr)",
-                line=dict(color="green", width=2)
+                line=dict(color="purple", width=2)
             ),
             # Plot 70-year bias-adjusted Tmin
             go.Scatter(
@@ -291,7 +289,7 @@ def update_graph_and_table(selected_model):
                 y=data_70yr.values,
                 mode="lines",
                 name="Bias-Adjusted (70yr)",
-                line=dict(color="red", width=2)
+                line=dict(color="cyan", width=2)
             )
         ],
         "layout": go.Layout(
