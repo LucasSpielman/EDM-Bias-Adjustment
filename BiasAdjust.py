@@ -95,8 +95,8 @@ train_slice_70yr = slice("1931-01-01", "2000-12-31")  # 70-year window
 
 # Check the time range of the data
 # This ensures that the observed and model data overlap in time.
-print("Observed time range:", obs_tmin["time"].min().values, "to", obs_tmin["time"].max().values)
-print("Model time range:", model_tmin_all["time"].min().values, "to", model_tmin_all["time"].max().values)
+# print("Observed time range:", obs_tmin["time"].min().values, "to", obs_tmin["time"].max().values)
+# print("Model time range:", model_tmin_all["time"].min().values, "to", model_tmin_all["time"].max().values)
 
 # Ensure time coordinates are in datetime64 format
 obs_tmin["time"] = pd.to_datetime(obs_tmin["time"].values)
