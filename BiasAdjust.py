@@ -10,7 +10,7 @@
 # Import required libraries
 import pandas as pd  # For handling tabular data
 import xarray as xr  # For working with multi-dimensional arrays
-import xclim.sdba as sdba  # For statistical bias adjustment
+import xsdba as sdba  # For statistical bias adjustment (use xsdba directly)
 from xclim import set_options  # For configuring xclim options
 
 # -------------------------------
@@ -38,15 +38,15 @@ obs_df = obs_df.replace(-9999.9, pd.NA)
 
 # Handle missing values
 # Fill missing values with the column mean to ensure no gaps in the data.
-model_df = model_df.fillna(model_df.mean())
-obs_df = obs_df.fillna(obs_df.mean())
+model_df = model_df.fillna(model_df.mean()).infer_objects(copy=False)
+obs_df = obs_df.fillna(obs_df.mean()).infer_objects(copy=False)
 
 # Ensure all model columns are numeric
 # Convert all columns to numeric, coercing invalid values to NaN.
 model_df = model_df.apply(pd.to_numeric, errors="coerce")
 
 # Handle missing values again (if needed)
-model_df = model_df.fillna(model_df.mean())
+model_df = model_df.fillna(model_df.mean()).infer_objects(copy=False)
 
 # -------------------------------
 # STEP 2: Convert all model columns to a single xarray.DataArray
@@ -82,9 +82,9 @@ obs_tmin = xr.DataArray(
 # Training periods are time windows used to train the bias adjustment models.
 # These periods are defined as slices of time.
 
-train_slice_30yr = slice("1971-01-01", "2000-12-31")  # 30-year window
-train_slice_50yr = slice("1951-01-01", "2000-12-31")  # 50-year window
-train_slice_70yr = slice("1931-01-01", "2000-12-31")  # 70-year window
+train_slice_30yr = slice("1995-01-01", "2024-12-31")  # 30-year window
+train_slice_50yr = slice("1975-01-01", "2024-12-31")  # 50-year window
+train_slice_70yr = slice("1955-01-01", "2024-12-31")  # 70-year window
 
 # =====================================================
 # STEP 4: Train quantile mapping models
