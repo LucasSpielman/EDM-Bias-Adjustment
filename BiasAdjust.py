@@ -147,6 +147,36 @@ tmin_corrected_50 = QM_50.adjust(model_tmin_all)
 # Apply the 70-year EQM model to adjust Tmin
 tmin_corrected_70 = QM_70.adjust(model_tmin_all)
 
+# ================================
+# Export corrected data to Excel
+# ================================
+# Convert DataArrays to DataFrames for Excel export
+tmin_corrected_30_df = pd.DataFrame(
+    tmin_corrected_30.values,
+    columns=tmin_corrected_30.model.values,
+    index=pd.to_datetime(tmin_corrected_30.time.values)
+)
+tmin_corrected_30_df.index.name = "date"
+
+tmin_corrected_50_df = pd.DataFrame(
+    tmin_corrected_50.values,
+    columns=tmin_corrected_50.model.values,
+    index=pd.to_datetime(tmin_corrected_50.time.values)
+)
+tmin_corrected_50_df.index.name = "date"
+
+tmin_corrected_70_df = pd.DataFrame(
+    tmin_corrected_70.values,
+    columns=tmin_corrected_70.model.values,
+    index=pd.to_datetime(tmin_corrected_70.time.values)
+)
+tmin_corrected_70_df.index.name = "date"
+
+# Write to Excel files
+tmin_corrected_30_df.to_excel("./Data/tmin_corrected_30yr.xlsx")
+tmin_corrected_50_df.to_excel("./Data/tmin_corrected_50yr.xlsx")
+tmin_corrected_70_df.to_excel("./Data/tmin_corrected_70yr.xlsx")
+
 # =====================================================
 # STEP 6: Exceedance probability
 # =====================================================
